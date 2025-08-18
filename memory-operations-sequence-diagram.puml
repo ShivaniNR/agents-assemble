@@ -1,0 +1,237 @@
+@startuml Memory Operations Flow
+
+title Agents Assemble - Memory Operations Flow
+
+actor User
+participant "InputProcessor" as IP
+participant "PlannerAgent" as PA
+participant "PlanExecutor" as PE
+participant "MemoryAgent" as MA
+participant "ContextAgent" as CA
+participant "ResponseAgent" as RA
+participant "SessionManager" as SM
+database "StorageService" as SS
+
+== Memory Storage Flow ==
+
+User -> IP: "I met Jennifer Chen at a conference"
+activate IP
+IP -> PA: Process input
+activate PA
+PA -> PA: _classify_intent() -> "store_memory"
+PA -> PA: _select_agents() -> ["memory_agent", "response_agent"]
+PA -> PA: _create_execution_plan()
+PA --> IP: Return plan
+deactivate PA
+
+IP -> PE: Execute plan
+activate PE
+PE -> MA: Start memory building
+activate MA
+
+MA -> MA: _extract_entities_with_ai()
+note right: Extracts people, locations, organizations
+
+MA -> MA: _generate_memory_structure_gemini()
+note right
+  Creates structured representation:
+  - title
+  - summary
+  - key information
+  - context
+  - relationships
+end note
+
+MA -> CA: fetch_contextual_information()
+activate CA
+note right of CA: Gathers calendar and email data relevant to the memory
+CA -> CA: retrieve_calendar_events()
+CA -> CA: retrieve_relevant_emails()
+CA -> CA: analyze_temporal_context()
+CA --> MA: Return contextual information
+deactivate CA
+
+MA -> MA: _generate_embeddings_free()
+note right: Creates vector embeddings for search
+
+MA -> MA: _analyze_memory_completeness_gemini()
+note right: Identifies missing information and generates follow-up questions
+
+MA -> MA: enrich_with_context()
+note right: Integrates contextual information with memory content
+
+MA -> SM: start_memory_building()
+activate SM
+SM -> SM: Create pending memory
+SM --> MA: Return pending memory
+deactivate SM
+
+MA --> PE: Return memory status with follow-up questions
+deactivate MA
+
+PE -> RA: Generate response with follow-up
+activate RA
+RA -> RA: _generate_response()
+RA --> PE: Return response with question
+deactivate RA
+
+PE --> IP: Return execution result
+deactivate PE
+IP --> User: "Can you tell me more about Jennifer's role at the company?"
+deactivate IP
+
+== Memory Continuation Flow ==
+
+User -> IP: "She's a VP of Engineering at Stripe"
+activate IP
+IP -> PA: Process input
+activate PA
+PA -> PA: _classify_intent() -> "continue_memory"
+PA -> PA: _select_agents() -> ["memory_agent", "response_agent"]
+PA -> PA: _create_execution_plan()
+PA --> IP: Return plan
+deactivate PA
+
+IP -> PE: Execute plan
+activate PE
+PE -> MA: Continue memory building
+activate MA
+
+MA -> MA: _extract_entities_with_ai()
+MA -> MA: _merge_memory_content_gemini()
+note right: Intelligently combines existing and new content
+
+MA -> CA: update_contextual_information()
+activate CA
+CA -> CA: enhance_memory_with_context()
+CA --> MA: Return updated context
+deactivate CA
+
+MA -> SM: update_pending_memory()
+activate SM
+SM -> SM: Update memory content
+SM --> MA: Return updated memory
+deactivate SM
+
+MA --> PE: Return memory status
+deactivate MA
+
+PE -> RA: Generate response
+activate RA
+RA -> RA: _generate_response()
+RA --> PE: Return response
+deactivate RA
+
+PE --> IP: Return execution result
+deactivate PE
+IP --> User: "Is there anything else important about your meeting with Jennifer?"
+deactivate IP
+
+== Memory Completion Flow ==
+
+User -> IP: "That's all, she gave me her business card"
+activate IP
+IP -> PA: Process input
+activate PA
+PA -> PA: _classify_intent() -> "complete_memory"
+PA -> PA: _select_agents() -> ["memory_agent", "response_agent"]
+PA -> PA: _create_execution_plan()
+PA --> IP: Return plan
+deactivate PA
+
+IP -> PE: Execute plan
+activate PE
+PE -> MA: Complete memory
+activate MA
+
+MA -> MA: _enrich_memory_for_storage_gemini()
+note right
+  Finalizes memory for storage:
+  - Generates title
+  - Extracts action items
+  - Creates semantic tags
+end note
+
+MA -> CA: finalize_contextual_enrichment()
+activate CA
+CA -> CA: provide_final_context_enrichment()
+CA -> CA: extract_contextual_insights()
+CA --> MA: Return final context data
+deactivate CA
+
+MA -> MA: _generate_embeddings_free()
+note right: Creates final vector embeddings
+
+MA -> SS: store_memory()
+activate SS
+SS --> MA: Return memory ID
+deactivate SS
+
+MA -> SS: store_embedding()
+activate SS
+SS --> MA: Confirm embedding stored
+deactivate SS
+
+MA -> SM: complete_memory()
+activate SM
+SM -> SM: Mark memory as complete
+SM --> MA: Return completed memory
+deactivate SM
+
+MA --> PE: Return completion status
+deactivate MA
+
+PE -> RA: Generate completion response
+activate RA
+RA -> RA: _generate_response()
+RA --> PE: Return response
+deactivate RA
+
+PE --> IP: Return execution result
+deactivate PE
+IP --> User: "Great! I've saved that memory about meeting Jennifer Chen at Stripe."
+deactivate IP
+
+== Memory Query Flow ==
+
+User -> IP: "Who did I meet at the conference?"
+activate IP
+IP -> PA: Process input
+activate PA
+PA -> PA: _classify_intent() -> "query_memory"
+PA -> PA: _select_agents() -> ["memory_agent", "response_agent"]
+PA -> PA: _create_execution_plan()
+PA --> IP: Return plan
+deactivate PA
+
+IP -> PE: Execute plan
+activate PE
+PE -> MA: Search memories
+activate MA
+
+MA -> MA: _ensure_user_memories_loaded()
+note right: Loads user's memories from storage to cache
+
+MA -> MA: _generate_embeddings_free()
+note right: Creates vector embedding for query
+
+MA -> MA: Search vector index
+note right: Performs similarity search
+
+MA -> MA: Format search results
+MA --> PE: Return search results
+deactivate MA
+
+PE -> RA: Generate response with memory
+activate RA
+RA -> RA: _generate_response()
+note right: Uses memory content to answer query
+RA --> PE: Return response
+deactivate RA
+
+PE --> IP: Return execution result
+deactivate PE
+IP --> User: "You met Jennifer Chen, VP of Engineering at Stripe during the conference. She gave you her business card and mentioned they're hiring senior engineers."
+deactivate IP
+
+@enduml

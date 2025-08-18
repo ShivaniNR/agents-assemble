@@ -1,0 +1,124 @@
+@startuml System Architecture
+
+title Agents Assemble - System Architecture
+
+!define RECTANGLE class
+
+' Components
+package "Frontend" {
+  RECTANGLE "VoiceInterface" as FrontVoice
+  RECTANGLE "MemoryTimeline" as FrontTimeline
+  RECTANGLE "PhotoUpload" as FrontPhoto
+  RECTANGLE "MemoryCard" as FrontCard
+  RECTANGLE "AgentStatus" as FrontStatus
+}
+
+package "Backend Core" {
+  RECTANGLE "InputProcessor" as InputProc
+  RECTANGLE "PlanExecutor" as PlanExec
+  RECTANGLE "SessionManager" as SessMan
+}
+
+package "Agents" {
+  RECTANGLE "PlannerAgent" as PlanAgent
+  RECTANGLE "MemoryAgent" as MemAgent
+  RECTANGLE "VisionAgent" as VisAgent
+  RECTANGLE "VoiceAgent" as VoiceAgent
+  RECTANGLE "ContextAgent" as CtxAgent
+  RECTANGLE "ResponseAgent" as RespAgent
+}
+
+package "Services" {
+  RECTANGLE "StorageService" as Storage
+  RECTANGLE "GeminiService" as Gemini
+}
+
+package "Data Storage" {
+  database "Memories" as MemDB
+  database "Embeddings" as EmbedDB
+  database "Sessions" as SessionDB
+}
+
+package "External APIs" {
+  cloud "Google Gemini API" as GeminiAPI
+  cloud "Google Speech API" as SpeechAPI
+  cloud "Google NLP API" as NLPAPI
+}
+
+' Connections - Frontend to Backend
+FrontVoice -down-> InputProc : Audio/Text Input
+FrontPhoto -down-> InputProc : Image Upload
+FrontStatus <-down- InputProc : Agent Status Updates
+FrontTimeline <-down- InputProc : Memory Results
+FrontCard <-down- InputProc : Memory Data
+
+' Core Backend Connections
+InputProc -right-> PlanAgent : Process Request
+InputProc <-right- PlanAgent : Execution Plan
+InputProc -down-> PlanExec : Execute Plan
+InputProc <-down- PlanExec : Execution Result
+InputProc -down-> SessMan : Session Management
+PlanExec -right-> SessMan : Session Updates
+
+' Agent Connections
+PlanExec -down-> MemAgent : Memory Operations
+PlanExec -down-> VisAgent : Image Analysis
+PlanExec -down-> VoiceAgent : Speech Processing
+PlanExec -down-> CtxAgent : Context Enrichment
+PlanExec -down-> RespAgent : Generate Responses
+PlanAgent -down-> SessMan : Session Context
+
+' Service Connections
+MemAgent -right-> Storage : Store/Retrieve
+MemAgent -right-> Gemini : Memory Analysis
+VisAgent -right-> Gemini : Image Analysis
+CtxAgent -right-> Gemini : Context Analysis
+RespAgent -right-> Gemini : Response Generation
+
+' Add Gmail/Calendar Integration
+cloud "Google Gmail API" as GmailAPI
+cloud "Google Calendar API" as CalendarAPI
+CtxAgent -down-> GmailAPI : Email Data
+CtxAgent -down-> CalendarAPI : Calendar Events
+
+' Data Storage Connections
+Storage -down-> MemDB : Persist Memories
+Storage -down-> EmbedDB : Store Embeddings
+SessMan -down-> SessionDB : Manage Sessions
+
+' External API Connections
+Gemini -down-> GeminiAPI : LLM Requests
+VoiceAgent -down-> SpeechAPI : Speech Recognition
+MemAgent -down-> NLPAPI : Entity Extraction
+
+' Data Flow Descriptions
+note right of InputProc
+  Central coordinator that processes
+  all user inputs and routes to appropriate
+  components
+end note
+
+note right of PlanAgent
+  Analyzes user intent and creates
+  execution plan with required agents
+end note
+
+note right of PlanExec
+  Orchestrates agent execution
+  based on execution plan
+end note
+
+note right of MemAgent
+  Manages memory operations:
+  - Storage
+  - Continuation
+  - Completion
+  - Retrieval
+end note
+
+note right of SessMan
+  Maintains conversation state
+  and pending memory context
+end note
+
+@enduml

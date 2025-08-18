@@ -1,0 +1,186 @@
+@startuml Agents Assemble Sequential Flow
+
+title Agents Assemble - System Sequential Flow
+
+actor User
+participant "InputProcessor" as IP
+participant "VoiceAgent" as VA
+participant "PlannerAgent" as PA
+participant "PlanExecutor" as PE
+participant "MemoryAgent" as MA
+participant "VisionAgent" as VIS
+participant "ContextAgent" as CA
+participant "ResponseAgent" as RA
+participant "SessionManager" as SM
+database "StorageService" as SS
+
+== User Input Processing ==
+
+User -> IP: Send request (text/audio/image)
+activate IP
+
+alt Audio Input Present
+    IP -> VA: Transcribe audio
+    activate VA
+    VA -> VA: speech_to_text()
+    VA --> IP: Return transcription
+    deactivate VA
+end
+
+IP -> SM: Get or create session
+activate SM
+SM --> IP: Return session
+deactivate SM
+
+IP -> PA: Process input
+activate PA
+
+PA -> PA: _classify_intent()
+note right
+  Determines intent:
+  - store_memory
+  - query_memory
+  - continue_memory
+  - complete_memory
+  - general_conversation
+end note
+
+PA -> PA: _select_agents()
+note right
+  Selects appropriate agents:
+  - memory_agent
+  - vision_agent
+  - voice_agent
+  - response_agent
+end note
+
+PA -> PA: _create_execution_plan()
+PA -> SM: Add intent to history
+PA --> IP: Return plan
+deactivate PA
+
+IP -> PE: Execute plan
+activate PE
+
+== Plan Execution ==
+
+PE -> PE: _execute_sequential_plan()
+
+alt Vision Processing Needed
+    PE -> VIS: Process image
+    activate VIS
+    VIS -> VIS: describe()
+    VIS --> PE: Return image analysis
+    deactivate VIS
+end
+
+alt Context Enrichment Needed
+    PE -> CA: Gather contextual information
+    activate CA
+    CA -> CA: fetch_calendar_events()
+    CA -> CA: fetch_gmail_context()
+    CA -> CA: analyze_contextual_data()
+    CA --> PE: Return enriched context
+    deactivate CA
+end
+
+alt Memory Operation
+    PE -> MA: Process memory operation
+    activate MA
+    
+    alt Intent: store_memory
+        MA -> MA: _start_memory_building()
+        MA -> MA: _extract_entities_with_ai()
+MA -> MA: _generate_memory_structure_gemini()
+MA -> MA: _generate_embeddings_free()
+MA -> CA: enrich_with_context()
+activate CA
+CA -> CA: fetch_relevant_context()
+CA --> MA: Return context data
+deactivate CA
+MA -> SM: start_memory_building()
+    else Intent: continue_memory
+        MA -> MA: _continue_memory_building()
+        MA -> MA: _merge_memory_content_gemini()
+        MA -> SM: update_pending_memory()
+    else Intent: complete_memory
+        MA -> MA: _complete_memory()
+        MA -> MA: _enrich_memory_for_storage_gemini()
+        MA -> SS: store_memory()
+        MA -> SS: store_embedding()
+        MA -> SM: complete_memory()
+    else Intent: query_memory
+        MA -> MA: _search_memories()
+        MA -> MA: _ensure_user_memories_loaded()
+        MA -> MA: _generate_embeddings_free()
+    end
+    
+    MA --> PE: Return memory result
+    deactivate MA
+end
+
+PE -> RA: Generate response
+activate RA
+RA -> RA: _generate_response()
+RA -> SM: Add to conversation history
+RA --> PE: Return response
+deactivate RA
+
+PE --> IP: Return execution result
+deactivate PE
+
+IP --> User: Return final response
+deactivate IP
+
+== Memory Building Process Detail ==
+
+alt Memory Building Flow
+    User -> IP: Share memory
+    IP -> PA: Process input
+    PA -> PE: Execute plan
+PE -> MA: Start memory building
+MA -> CA: Get contextual information
+activate CA
+CA -> CA: fetch_calendar_context()
+CA --> MA: Return context data
+deactivate CA
+MA -> SM: Start pending memory
+MA --> PE: Return follow-up questions
+    PE -> RA: Generate follow-up question
+    RA --> User: Ask for more details
+    
+    User -> IP: Provide more details
+    IP -> PA: Process input
+    PA -> PE: Execute plan
+    PE -> MA: Continue memory building
+    MA -> SM: Update pending memory
+    MA --> PE: Return status
+    PE -> RA: Generate response
+    RA --> User: Ask additional question or confirm
+    
+    User -> IP: Confirm completion
+    IP -> PA: Process input
+    PA -> PE: Execute plan
+    PE -> MA: Complete memory
+    MA -> SS: Store final memory and embeddings
+    MA -> SM: Complete memory
+    MA --> PE: Return status
+    PE -> RA: Generate completion response
+    RA --> User: Confirm memory saved
+end
+
+== Memory Query Process Detail ==
+
+alt Memory Query Flow
+    User -> IP: Ask about a memory
+    IP -> PA: Process input
+    PA -> PE: Execute plan
+    PE -> MA: Search memories
+    MA -> MA: Generate query embeddings
+    MA -> MA: Search embeddings
+    MA --> PE: Return search results
+    PE -> RA: Generate response with memory
+    RA --> User: Respond with memory information
+end
+
+@enduml

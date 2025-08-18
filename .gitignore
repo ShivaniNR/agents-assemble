@@ -1,1 +1,11 @@
 backend/agents-assemble
+sa-speech.json
+.env
+__pycache__
+*.pyc
+*.pyo
+.vscode
+backend/data/embeddings/*
+backend/data/memories/events/*
+backend/.pytest_cache
+backend/working_main.py

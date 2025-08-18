@@ -427,50 +427,50 @@ storage_service = StorageService()
 
 
 # Example usage and testing
-async def main():
-    """Example usage of the storage service"""
+# async def main():
+#     """Example usage of the storage service"""
     
-    # Initialize storage service
-    service = StorageService()
+#     # Initialize storage service
+#     service = StorageService()
     
-    # Health check
-    health = await service.health_check()
-    print(f"Storage health: {health}")
+#     # Health check
+#     health = await service.health_check()
+#     print(f"Storage health: {health}")
     
-    # Store a memory
-    memory_data = {
-        "title": "Met Jennifer at TechCrunch",
-        "description": "Great conversation about Stripe's crypto APIs",
-        "people": ["Jennifer Chen"],
-        "location": "TechCrunch Conference",
-        "tags": ["networking", "conference", "crypto"],
-        "emotional_context": "excited",
-        "type": "conversation"
-    }
+#     # Store a memory
+#     memory_data = {
+#         "title": "Met Jennifer at TechCrunch",
+#         "description": "Great conversation about Stripe's crypto APIs",
+#         "people": ["Jennifer Chen"],
+#         "location": "TechCrunch Conference",
+#         "tags": ["networking", "conference", "crypto"],
+#         "emotional_context": "excited",
+#         "type": "conversation"
+#     }
     
-    memory_id = await service.store_memory(memory_data)
-    print(f"Stored memory: {memory_id}")
+#     memory_id = await service.store_memory(memory_data)
+#     print(f"Stored memory: {memory_id}")
     
-    # Retrieve the memory
-    retrieved = await service.get_memory(memory_id)
-    print(f"Retrieved memory: {retrieved['title']}")
+#     # Retrieve the memory
+#     retrieved = await service.get_memory(memory_id)
+#     print(f"Retrieved memory: {retrieved['title']}")
     
-    # Store an embedding
-    await service.store_embedding(
-        memory_id, 
-        [0.1, 0.2, 0.3] * 100,  # Mock embedding vector
-        {"type": "memory", "content": memory_data["description"]}
-    )
+#     # Store an embedding
+#     await service.store_embedding(
+#         memory_id, 
+#         [0.1, 0.2, 0.3] * 100,  # Mock embedding vector
+#         {"type": "memory", "content": memory_data["description"]}
+#     )
     
-    # Cache some data
-    await service.cache_set("api_response_123", {"result": "success"}, ttl_seconds=60)
-    cached_data = await service.cache_get("api_response_123")
-    print(f"Cached data: {cached_data}")
+#     # Cache some data
+#     await service.cache_set("api_response_123", {"result": "success"}, ttl_seconds=60)
+#     cached_data = await service.cache_get("api_response_123")
+#     print(f"Cached data: {cached_data}")
     
-    # Get storage stats
-    stats = await service.get_stats()
-    print(f"Storage stats: {stats}")
+#     # Get storage stats
+#     stats = await service.get_stats()
+#     print(f"Storage stats: {stats}")
 
 
-if __name__ == "__main__":
-    asyncio.run(main())
+# if __name__ == "__main__":
+#     asyncio.run(main())

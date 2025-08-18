@@ -69,6 +69,11 @@ export default function Home() {
   const [actualUserQueries, setActualUserQueries] = useState<string[]>([]);
   const [isUsingRealQueries, setIsUsingRealQueries] = useState(false);
 
+  // NEW: Backend integration state
+  const [useBackendTranscription, setUseBackendTranscription] = useState(true); // Toggle for backend vs browser
+  const [currentUserId] = useState("user_123"); // You might get this from auth/session
+  const [apiEndpoint] = useState("http://localhost:8000/api/process"); // Your API endpoint
+
   const memoryPhotos = [
     { id: 1, name: "Jennifer Chen", imageUrl: "/Jennifer.jpeg" },
     { id: 2, name: "Jake's Bday", imageUrl: "/Jakes Birthday.jpeg" },
@@ -93,73 +98,216 @@ export default function Home() {
     setView("thinking");
   };
 
-  const handleVoiceTranscript = async (transcript: string, isFinal: boolean) => {
-    setCurrentUserQuery(transcript);
-    setVoiceTranscript(transcript);
+  const handleVoiceTranscript = async (
+    transcript: string,
+    isFinal: boolean
+  ) => {
+    console.log(`Voice transcript: "${transcript}", isFinal: ${isFinal}`);
+
+    if (useBackendTranscription) {
+      // In backend mode, only update UI for preview (not final processing)
+      if (!isFinal && transcript.startsWith("[Preview]")) {
+        setCurrentUserQuery(transcript);
+        setVoiceTranscript(transcript);
+      } else if (isFinal) {
+        // This is the final backend transcription
+        setCurrentUserQuery(transcript);
+        setVoiceTranscript(transcript);
+
+        // Auto-process the backend transcription
+        await processVoiceQuery(transcript);
+      }
+    } else {
+      // Browser-only mode (original behavior)
+      setCurrentUserQuery(transcript);
+      setVoiceTranscript(transcript);
+
+      if (isFinal) {
+        await processVoiceQuery(transcript);
+      }
+    }
+  };
+
+  // NEW: Handle backend response
+  const handleBackendResponse = async (response: any) => {
+    console.log("Backend response received:", response);
+
+    if (response.success && response.result) {
+      const { transcribed_text, response: agentResponse } = response.result;
+
+      // The transcript has already been handled in handleVoiceTranscript
+      // This is where you can handle additional backend data like:
+      // - Audio responses
+      // - Intent detection results
+      // - Memory storage confirmations
+
+      if (response.result.audio_response) {
+        // Play audio response if available
+        playAudioResponse(response.result.audio_response);
+      }
+
+      // Log for debugging
+      console.log("Agent response:", agentResponse);
+      console.log("Transcribed text:", transcribed_text);
+    }
+  };
+
+  // NEW: Play audio response from backend
+  const playAudioResponse = (audioData: string) => {
+    try {
+      const audio = new Audio(`data:audio/mp3;base64,${audioData}`);
+      audio.play().catch(console.error);
+    } catch (error) {
+      console.error("Error playing audio response:", error);
+    }
   };
 
   const handleVoiceStart = () => {
     setCurrentUserQuery("");
     setVoiceTranscript("");
+    console.log("Voice input started");
   };
 
-  const handleVoiceEnd = () => {};
+  const handleVoiceEnd = () => {
+    console.log("Voice input ended");
+  };
 
   const handleVoiceError = (error: string) => {
     console.error("Voice error:", error);
     setIsVoiceListening(false);
     setIsProcessingVoice(false);
+    // Show error to user
+    setCurrentUserQuery(`Voice Error: ${error}`);
+
+    // Clear error after 3 seconds
+    setTimeout(() => {
+      setCurrentUserQuery("");
+    }, 3000);
   };
 
   const toggleVoiceListening = async () => {
     if (isProcessingVoice) return;
 
     if (isVoiceListening) {
+      // Stop listening
       setIsVoiceListening(false);
 
-      if (voiceTranscript.trim()) {
+      // If using browser-only transcription, process the current transcript
+      if (!useBackendTranscription && voiceTranscript.trim()) {
         setIsProcessingVoice(true);
+        await processVoiceQuery(voiceTranscript);
+        setIsProcessingVoice(false);
+      }
+      // Note: Backend transcription will be handled automatically in handleVoiceTranscript
+    } else {
+      // Start listening
+      setIsVoiceListening(true);
+    }
 
-        try {
-          const result: VoiceQueryResult = await voiceService.processVoiceQuery(
-            voiceTranscript
-          );
+    //   if (voiceTranscript.trim()) {
+    //     setIsProcessingVoice(true);
 
-          let adjustedResponse = result.response;
+    //     try {
+    //       const result: VoiceQueryResult = await voiceService.processVoiceQuery(
+    //         voiceTranscript
+    //       );
+
+    //       let adjustedResponse = result.response;
+
+    //       // SPECIAL OVERRIDE for Jake's Bday
+    //       if (
+    //         voiceTranscript.toLowerCase().includes("jake") &&
+    //         voiceTranscript.toLowerCase().includes("bday")
+    //       ) {
+    //         adjustedResponse = "I'm here! What's happening right now?";
+    //       }
+
+    //       if (result.success && adjustedResponse) {
+    //         if (
+    //           voiceTranscript
+    //             .toLowerCase()
+    //             .includes("i want to remember this moment")
+    //         ) {
+    //           setShowPhotoUploadLeft(true);
+    //         }
+    //         await handleVoiceQuery(voiceTranscript, adjustedResponse);
+    //       } else {
+    //         setCurrentUserQuery(
+    //           "I'm sorry, I couldn't process your request. Please try again."
+    //         );
+    //       }
+    //     } catch (error) {
+    //       console.error("Error processing voice query:", error);
+    //       setCurrentUserQuery(
+    //         "I'm experiencing some technical difficulties. Please try again."
+    //       );
+    //     } finally {
+    //       setIsProcessingVoice(false);
+    //     }
+    //   }
+    // } else {
+    //   setIsVoiceListening(true);
+    // }
+  };
+
+  // Modified to handle both backend and legacy voiceService
+  const processVoiceQuery = async (transcript: string) => {
+    if (!transcript.trim()) return;
+
+    setIsProcessingVoice(true);
+
+    try {
+      let response: string;
+
+      if (useBackendTranscription) {
+        // Backend has already processed and returned the response in handleBackendResponse
+        // For now, we'll use a default response since the actual response should come from backend
+        response =
+          "I've received and processed your message through the backend.";
+
+        // SPECIAL OVERRIDE for Jake's Bday (keeping your existing logic)
+        if (
+          transcript.toLowerCase().includes("jake") &&
+          transcript.toLowerCase().includes("bday")
+        ) {
+          response = "I'm here! What's happening right now?";
+        }
+      } else {
+        // Use legacy voiceService for browser-only mode
+        const result: VoiceQueryResult = await voiceService.processVoiceQuery(
+          transcript
+        );
+
+        if (result.success && result.response) {
+          response = result.response;
 
           // SPECIAL OVERRIDE for Jake's Bday
           if (
-            voiceTranscript
-              .toLowerCase()
-              .includes("jake") &&
-            voiceTranscript.toLowerCase().includes("bday")
+            transcript.toLowerCase().includes("jake") &&
+            transcript.toLowerCase().includes("bday")
           ) {
-            adjustedResponse = "I'm here! What's happening right now?";
+            response = "I'm here! What's happening right now?";
           }
-
-          if (result.success && adjustedResponse) {
-            if (
-              voiceTranscript.toLowerCase().includes("i want to remember this moment")
-            ) {
-              setShowPhotoUploadLeft(true);
-            }
-            await handleVoiceQuery(voiceTranscript, adjustedResponse);
-          } else {
-            setCurrentUserQuery(
-              "I'm sorry, I couldn't process your request. Please try again."
-            );
-          }
-        } catch (error) {
-          console.error("Error processing voice query:", error);
-          setCurrentUserQuery(
-            "I'm experiencing some technical difficulties. Please try again."
-          );
-        } finally {
-          setIsProcessingVoice(false);
+        } else {
+          response =
+            "I'm sorry, I couldn't process your request. Please try again.";
         }
       }
-    } else {
-      setIsVoiceListening(true);
+
+      // Handle memory upload trigger
+      if (transcript.toLowerCase().includes("i want to remember this moment")) {
+        setShowPhotoUploadLeft(true);
+      }
+
+      // Process the conversation flow
+      await handleVoiceQuery(transcript, response);
+    } catch (error) {
+      console.error("Error processing voice query:", error);
+      setCurrentUserQuery(
+        "I'm experiencing some technical difficulties. Please try again."
+      );
+    } finally {
+      setIsProcessingVoice(false);
     }
   };
 
@@ -220,6 +368,16 @@ export default function Home() {
     }
   };
 
+  // NEW: Toggle between backend and browser transcription
+  const toggleTranscriptionMode = () => {
+    setUseBackendTranscription(!useBackendTranscription);
+    console.log(
+      `Switched to ${
+        !useBackendTranscription ? "backend" : "browser"
+      } transcription`
+    );
+  };
+
   return (
     <div className="bg-gray-50 text-gray-800 min-h-screen font-sans overflow-hidden relative">
       {/* This div blurs the background when the modal is open */}
@@ -251,6 +409,16 @@ export default function Home() {
                     <a href="/settings" className="hover:text-gray-300">
                       Settings
                     </a>
+                    {/* NEW: Toggle button for transcription mode */}
+                    <button
+                      onClick={toggleTranscriptionMode}
+                      className="bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded text-sm"
+                      title={`Currently using ${
+                        useBackendTranscription ? "backend" : "browser"
+                      } transcription`}
+                    >
+                      {useBackendTranscription ? "🔧 Backend" : "🌐 Browser"}
+                    </button>
                   </nav>
                 </header>
               </div>
@@ -327,7 +495,8 @@ export default function Home() {
                             ? "Processing your request..."
                             : isVoiceListening && voiceTranscript
                             ? voiceTranscript
-                            : currentUserQuery || "Ask or talk about a memory..."}
+                            : currentUserQuery ||
+                              "Ask or talk about a memory..."}
                         </p>
                       )}
                     </div>
@@ -340,6 +509,11 @@ export default function Home() {
                       disabled={isProcessingVoice}
                       isListening={isVoiceListening}
                       onToggleListening={toggleVoiceListening}
+                      // NEW props for backend integration
+                      useBackendTranscription={useBackendTranscription}
+                      onBackendResponse={handleBackendResponse}
+                      userId={currentUserId}
+                      apiEndpoint={apiEndpoint}
                     />
                     {/* --- PARTNER'S ADDITION: onClick handler for the upload button --- */}
                     <button
@@ -400,70 +574,79 @@ export default function Home() {
         </AnimatePresence>
 
         <AnimatePresence>
-  {view === "chat" && (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.5 }}
-      className="absolute inset-0"
-    >
-      <div className="flex h-screen">
-        {/* Left Panel */}
-        <div className="w-1/3 bg-gray-50 border-r border-gray-200 p-8 flex flex-col justify-center items-center relative">
-          <button
-            onClick={handleGoHome}
-            className="absolute top-6 left-6 text-2xl hover:text-gray-500"
-          >
-            &times;
-          </button>
-          <div className="w-full">
-            {showPhotoUploadLeft ? (
-              <div className="flex flex-col items-start w-full">
-                <PhotoUploadModal
-                  isOpen={true}
-                  onClose={() => {}}
-                  onPhotoUpload={(photo) =>
-                    console.log("Photo uploaded during memory creation:", photo)
-                  }
-                />
-              </div>
-            ) : (
-              <div className="flex flex-col items-center w-full">
-                <img
-                  src="/Jennifer.jpeg"
-                  alt="Jennifer Chen"
-                  className="w-40 h-40 object-cover rounded-xl shadow-xl"
-                />
-                <p className="mt-4 text-lg font-semibold text-center">Jennifer Chen</p>
-              </div>
-            )}
-          </div>
-        </div>
+          {view === "chat" && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.5 }}
+              className="absolute inset-0"
+            >
+              <div className="flex h-screen">
+                {/* Left Panel */}
+                <div className="w-1/3 bg-gray-50 border-r border-gray-200 p-8 flex flex-col justify-center items-center relative">
+                  <button
+                    onClick={handleGoHome}
+                    className="absolute top-6 left-6 text-2xl hover:text-gray-500"
+                  >
+                    &times;
+                  </button>
+                  {/* NEW: Mode indicator */}
+                  <div className="absolute top-6 right-6 text-sm text-gray-500">
+                    {useBackendTranscription ? "🔧" : "🌐"}
+                  </div>
+                  <div className="w-full">
+                    {showPhotoUploadLeft ? (
+                      <div className="flex flex-col items-start w-full">
+                        <PhotoUploadModal
+                          isOpen={true}
+                          onClose={() => {}}
+                          onPhotoUpload={(photo) =>
+                            console.log(
+                              "Photo uploaded during memory creation:",
+                              photo
+                            )
+                          }
+                        />
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center w-full">
+                        <img
+                          src="/Jennifer.jpeg"
+                          alt="Jennifer Chen"
+                          className="w-40 h-40 object-cover rounded-xl shadow-xl"
+                        />
+                        <p className="mt-4 text-lg font-semibold text-center">
+                          Jennifer Chen
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
 
-        {/* Right Panel */}
-        <div className="w-2/3 flex flex-col p-8 bg-white">
-          <div
-            ref={chatContainerRef}
-            className="flex-grow overflow-y-auto pr-4 space-y-6"
-          >
-            {conversation.map((chat, index) => (
-              <div key={index}>
-                {chat.sender === "user" ? (
-                  <div className="flex items-start gap-3 justify-end">
-                    <div className="bg-blue-500 text-white p-3 rounded-lg max-w-xl">
-                      <TypewriterText text={chat.query} />
-                    </div>
+                {/* Right Panel */}
+                <div className="w-2/3 flex flex-col p-8 bg-white">
+                  <div
+                    ref={chatContainerRef}
+                    className="flex-grow overflow-y-auto pr-4 space-y-6"
+                  >
+                    {conversation.map((chat, index) => (
+                      <div key={index}>
+                        {chat.sender === "user" ? (
+                          <div className="flex items-start gap-3 justify-end">
+                            <div className="bg-blue-500 text-white p-3 rounded-lg max-w-xl">
+                              <TypewriterText text={chat.query} />
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-start gap-3">
+                            <div className="bg-gray-100 p-3 rounded-lg max-w-xl">
+                              <TypewriterText text={chat.response || ""} />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
                   </div>
-                ) : (
-                  <div className="flex items-start gap-3">
-                    <div className="bg-gray-100 p-3 rounded-lg max-w-xl">
-                      <TypewriterText text={chat.response || ""} />
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
 
                   {/* Chat input area */}
                   <div className="flex-shrink-0 pt-6">
@@ -477,6 +660,11 @@ export default function Home() {
                         disabled={isProcessingVoice}
                         isListening={isVoiceListening}
                         onToggleListening={toggleVoiceListening}
+                        // NEW: Backend integration props for chat view too
+                        useBackendTranscription={useBackendTranscription}
+                        onBackendResponse={handleBackendResponse}
+                        userId={currentUserId}
+                        apiEndpoint={apiEndpoint}
                       />
                     </div>
                   </div>
