@@ -6,7 +6,7 @@ import google.generativeai as genai
 from core.sessionManager import SessionManager
 from services.storage_service import StorageService
 from agents.planner_agent import PlannerAgent
-from backend.agents.voice_agent import VoiceAgent  
+from agents.voice_agent import VoiceAgent  
 from core.planExecutor import PlanExecutor
 import os
 
@@ -95,10 +95,11 @@ class InputProcessor:
             
             # Step 3: Execute the plan
             execution_result = await self._execute_plan(plan, processed_input, request_id)
+            execution_result['text'] = processed_input.get('text', '')
 
             logger.info(f"Done with execution: {execution_result['success']}")
             
-            # # Step 4: Track and return results
+            # Step 4: Track and return results
             processing_time = (datetime.now() - start_time).total_seconds()
             
             self._track_request(request_id, request_data, plan, execution_result, processing_time)
@@ -130,43 +131,55 @@ class InputProcessor:
         # Check if we have voice input that needs transcription
         has_audio = bool(request_data.get("audio_data") or request_data.get("audio_url"))
         has_text = bool(request_data.get("text", "").strip())
+        browser_transcript = request_data.get("browser_transcript", "").strip()
 
-        #determin if the memory is complete or not
+        # Determine if the memory is complete or not
         explicit_memory_complete = request_data.get('explicit_complete_memory', False)
         
-        if has_audio and not has_text:
+        if has_audio:
             logger.info(f"Transcribing voice input for request {request_id}")
             
             try:
-                # Use voice agent to transcribe TODO: Implement voice transcription logic
-                transcription_result = await self.voice_agent.process({
-                    "audio_data": request_data.get("audio_data"),
-                    "audio_url": request_data.get("audio_url"),
-                    "action": "transcribe",
-                    "request_id": request_id
-                })
-
-                #mock response for testing
-                # transcription_result = {'agent': 'VoiceAgent', 'status': 'success', 'timestamp': '2025-07-31T18:54:27.069902', 'data': {'transcript': 'Birch canoe, slid on the smooth planks.  Glue the sheet to the dark blue background.  it is easy to tell the depth of a well,  These days, a chicken leg is a rare dish.  Rice is often served in round bowls.  The juice of lemons makes fine punch.  The box was thrown beside the park truck.  The Hogs are fed, chopped corn and garbage.  Four hours of steady work faced us.  A large size and stockings is hard to sell.'}}
-
-                logger.info(f"Transcribing voice done {transcription_result}")
-                
-                if transcription_result.get("status") == "success":
-                    transcription_data = transcription_result.get("data", {})
-                    processed_data["text"] = transcription_data.get("transcript", "")
-                    # processed_data["voice_metadata"] = {
-                    #     "confidence": transcription_data.get("confidence"),
-                    #     "language": transcription_data.get("language"),
-                    #     "duration": transcription_data.get("duration")
-                    # }
-                    logger.info(f"Voice transcribed: '{processed_data['text'][:50]}...'")
+                # Use voice agent to transcribe audio
+                audio_path = request_data.get("audio_data")
+                if audio_path and isinstance(audio_path, str):
+                    logger.info(f"Using audio file from path: {audio_path}")
+                    
+                    transcription_result = await self.voice_agent.process({
+                        "audio_file_path": audio_path,
+                        "action": "transcribe",
+                        "request_id": request_id
+                    })
+                    
+                    logger.info(f"Transcription result status: {transcription_result.get('status')}")
+                    
+                    if transcription_result.get("status") == "success":
+                        transcription_data = transcription_result.get("data", {})
+                        processed_data["text"] = transcription_data.get("transcript", "")
+                        logger.info(f"Voice transcribed: '{processed_data['text'][:50]}...'")
+                    else:
+                        # Fallback to browser transcript if voice transcription fails
+                        if browser_transcript:
+                            logger.info(f"Voice transcription failed, using browser transcript: {browser_transcript[:50]}...")
+                            processed_data["text"] = browser_transcript
+                        else:
+                            return {"error": "Voice transcription failed and no browser transcript available"}
                 else:
-                    return {"error": "Voice transcription failed"}
-                # return {"error": "Voice transcription not yet implemented"}
+                    # No audio file, use browser transcript
+                    if browser_transcript:
+                        logger.info(f"No audio file provided, using browser transcript: {browser_transcript[:50]}...")
+                        processed_data["text"] = browser_transcript
+                    else:
+                        return {"error": "No audio file provided and no browser transcript available"}
                     
             except Exception as e:
                 logger.error(f"Voice transcription error: {str(e)}")
-                return {"error": f"Voice processing failed: {str(e)}"}
+                # Fallback to browser transcript on error
+                if browser_transcript:
+                    logger.info(f"Voice processing failed, using browser transcript: {browser_transcript[:50]}...")
+                    processed_data["text"] = browser_transcript
+                else:
+                    return {"error": f"Voice processing failed: {str(e)}"}
         
         # Validate that we have some text to work with
         if not processed_data.get("text", "").strip():

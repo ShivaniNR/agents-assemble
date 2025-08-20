@@ -8,8 +8,8 @@ from core.sessionManager import SessionManager, ConversationState, InputType
 from services.storage_service import StorageService
 # Import your agents here when they're implemented
 from agents.memory_agent import MemoryAgent
-from backend.agents.response_agent import ResponseAgent
-from backend.agents.voice_agent import VoiceAgent
+from agents.response_agent import ResponseAgent
+#from agents.voice_agent import VoiceAgent
 # from agents.vision_agent import VisionAgent
 # from agents.context_agent import ContextAgent
 
@@ -29,7 +29,7 @@ class PlanExecutor:
         self.memory_agent = MemoryAgent(self.session_manager, self.storage_service)
         self.response_agent = ResponseAgent(self.session_manager)
         # self.vision_agent = VisionAgent()
-        self.voice_agent = VoiceAgent(self.session_manager)
+        #self.voice_agent = VoiceAgent(self.session_manager)
         # self.context_agent = ContextAgent()
         
         # Agent registry for dynamic execution
@@ -37,7 +37,7 @@ class PlanExecutor:
             "memory_agent": self.memory_agent,
             "response_agent": self.response_agent,
             # "vision_agent": self.vision_agent,
-            "voice_agent": self.voice_agent,
+            #"voice_agent": self.voice_agent,
             # "context_agent": self.context_agent
         }
         
@@ -176,8 +176,8 @@ class PlanExecutor:
                     agent_context["accumulated_data"]["memory_result"] = agent_output
                 elif agent_name == "vision_agent":
                     agent_context["accumulated_data"]["vision_result"] = agent_output
-                elif agent_name == "voice_agent":
-                    agent_context["accumulated_data"]["voice_result"] = agent_output
+                # elif agent_name == "voice_agent":
+                #     agent_context["accumulated_data"]["voice_result"] = agent_output
                 elif agent_name == "context_agent":
                     agent_context["accumulated_data"]["context_result"] = agent_output
                 elif agent_name == "response_agent":
@@ -401,8 +401,8 @@ class PlanExecutor:
             return await self._simulate_response_agent(instruction, context)
         elif agent_name == "vision_agent":
             return await self._simulate_vision_agent(instruction, context)
-        elif agent_name == "voice_agent":
-            return await self._simulate_voice_agent(instruction, context)
+        # elif agent_name == "voice_agent":
+        #     return await self._simulate_voice_agent(instruction, context)
         elif agent_name == "context_agent":
             return await self._simulate_context_agent(instruction, context)
         else:
@@ -582,28 +582,28 @@ class PlanExecutor:
                 }
             }
 
-    async def _simulate_voice_agent(self, instruction: str, context: Dict[str, Any]) -> Dict[str, Any]:
-        """Simulate voice agent behavior"""
-        audio_data = context.get("audio_data")
+    # async def _simulate_voice_agent(self, instruction: str, context: Dict[str, Any]) -> Dict[str, Any]:
+    #     """Simulate voice agent behavior"""
+    #     audio_data = context.get("audio_data")
         
-        if audio_data:
-            # Simulate speech processing
-            return {
-                "success": True,
-                "data": {
-                    "transcription": context.get("text", "Simulated transcription"),
-                    "confidence": 0.9,
-                    "language": "en-US",
-                    "duration": 5.2
-                }
-            }
-        else:
-            return {
-                "success": True,
-                "data": {
-                    "message": "No audio data provided"
-                }
-            }
+    #     if audio_data:
+    #         # Simulate speech processing
+    #         return {
+    #             "success": True,
+    #             "data": {
+    #                 "transcription": context.get("text", "Simulated transcription"),
+    #                 "confidence": 0.9,
+    #                 "language": "en-US",
+    #                 "duration": 5.2
+    #             }
+    #         }
+    #     else:
+    #         return {
+    #             "success": True,
+    #             "data": {
+    #                 "message": "No audio data provided"
+    #             }
+    #         }
 
     async def _simulate_context_agent(self, instruction: str, context: Dict[str, Any]) -> Dict[str, Any]:
         """Simulate context agent behavior"""

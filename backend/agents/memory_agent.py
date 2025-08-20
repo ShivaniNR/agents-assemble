@@ -1015,9 +1015,11 @@ Provide enrichment as JSON:
         try:
             # Get all memories from storage service
             all_memories = await self.storage.list_memories(limit=100)  # Adjust limit as needed
-            
+            logger.info(f"Captured all memories")
+
             # Filter memories for this user
             user_memories = [m for m in all_memories if m.get("user_id") == user_id]
+            logger.info(f"Captured all memories of the user")
 
             # Initialize cache for this user
             self.user_memory_cache[user_id] = {}
@@ -1050,7 +1052,14 @@ Provide enrichment as JSON:
                 embedding_data = await self.storage.get_embedding(memory_id)
                 
                 if embedding_data and embedding_data.get("embedding"):
-                    embedding = np.array(embedding_data["embedding"])
+                    #embedding = np.array(embedding_data["embedding"])
+                    emb_raw = embedding_data["embedding"]
+
+                    # Convert string to float32 array if needed
+                    if isinstance(emb_raw, str):
+                        embedding = np.fromstring(emb_raw.strip('[]'), sep=' ', dtype=np.float32)
+                    else:
+                        embedding = np.array(emb_raw, dtype=np.float32)
                     
                     # Add to FAISS index
                     norm_embedding = embedding / np.linalg.norm(embedding)
