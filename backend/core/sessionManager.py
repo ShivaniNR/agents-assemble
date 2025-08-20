@@ -381,224 +381,224 @@ class SessionManager:
         return sessions
 
 # Enhanced Planner Agent with Session Support
-class SessionAwarePlannerAgent:
-    """Enhanced version of your PlannerAgent with session management"""
+# class SessionAwarePlannerAgent:
+#     """Enhanced version of your PlannerAgent with session management"""
     
-    def __init__(self, session_manager: SessionManager):
-        self.session_manager = session_manager
-        self.agent_name = 'session_aware_planner'
+#     def __init__(self, session_manager: SessionManager):
+#         self.session_manager = session_manager
+#         self.agent_name = 'session_aware_planner'
         
-        # Your existing keywords
-        self.store_keywords = [
-            "remember", "save", "capture", "record", "store", "note",
-            "I met", "I went", "I did", "I saw", "happened", "today",
-            "yesterday", "just", "had a", "attended", "this is"
-        ]
+#         # Your existing keywords
+#         self.store_keywords = [
+#             "remember", "save", "capture", "record", "store", "note",
+#             "I met", "I went", "I did", "I saw", "happened", "today",
+#             "yesterday", "just", "had a", "attended", "this is"
+#         ]
         
-        self.query_keywords = [
-            "who", "what", "when", "where", "how", "recall", "find",
-            "tell me about", "remind me", "what did", "who was",
-            "do you remember", "can you find", "search for"
-        ]
+#         self.query_keywords = [
+#             "who", "what", "when", "where", "how", "recall", "find",
+#             "tell me about", "remind me", "what did", "who was",
+#             "do you remember", "can you find", "search for"
+#         ]
         
-        # Session-aware keywords
-        self.continuation_keywords = [
-            "yes", "yeah", "also", "and", "additionally", "plus",
-            "more", "furthermore", "too", "as well"
-        ]
+#         # Session-aware keywords
+#         self.continuation_keywords = [
+#             "yes", "yeah", "also", "and", "additionally", "plus",
+#             "more", "furthermore", "too", "as well"
+#         ]
         
-        self.completion_keywords = [
-            "that's all", "that's it", "nothing else", "save it",
-            "done", "finished", "complete", "got it"
-        ]
+#         self.completion_keywords = [
+#             "that's all", "that's it", "nothing else", "save it",
+#             "done", "finished", "complete", "got it"
+#         ]
     
-    async def process(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Enhanced process method with session awareness"""
-        try:
-            user_text = input_data.get('text', '').lower()
-            session_id = input_data.get('session_id')
-            user_id = input_data.get('user_id')
+#     async def process(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+#         """Enhanced process method with session awareness"""
+#         try:
+#             user_text = input_data.get('text', '').lower()
+#             session_id = input_data.get('session_id')
+#             user_id = input_data.get('user_id')
             
-            # Get or create session
-            session = None
-            if session_id:
-                session = await self.session_manager.get_session(session_id)
+#             # Get or create session
+#             session = None
+#             if session_id:
+#                 session = await self.session_manager.get_session(session_id)
             
-            if not session and user_id:
-                session_id = await self.session_manager.create_session(user_id)
-                session = await self.session_manager.get_session(session_id)
+#             if not session and user_id:
+#                 session_id = await self.session_manager.create_session(user_id)
+#                 session = await self.session_manager.get_session(session_id)
             
-            if not session:
-                raise ValueError("Could not create or retrieve session")
+#             if not session:
+#                 raise ValueError("Could not create or retrieve session")
             
-            # Classify intent with session context
-            intent, confidence = await self._classify_intent_with_session(user_text, session)
+#             # Classify intent with session context
+#             intent, confidence = await self._classify_intent_with_session(user_text, session)
             
-            # Add intent to history
-            await self.session_manager.add_intent_to_history(session_id, intent, confidence)
+#             # Add intent to history
+#             await self.session_manager.add_intent_to_history(session_id, intent, confidence)
             
-            # Select agents based on intent and session state
-            agents_needed = await self._select_agents_with_session(intent, input_data, session)
+#             # Select agents based on intent and session state
+#             agents_needed = await self._select_agents_with_session(intent, input_data, session)
             
-            # Create execution plan
-            execution_plan = self._create_execution_plan(intent, agents_needed, session)
+#             # Create execution plan
+#             execution_plan = self._create_execution_plan(intent, agents_needed, session)
             
-            # Add to conversation history
-            await self.session_manager.add_to_conversation_history(session_id, {
-                "type": "user_input",
-                "content": input_data.get("text", ""),
-                "intent": intent,
-                "confidence": confidence
-            })
+#             # Add to conversation history
+#             await self.session_manager.add_to_conversation_history(session_id, {
+#                 "type": "user_input",
+#                 "content": input_data.get("text", ""),
+#                 "intent": intent,
+#                 "confidence": confidence
+#             })
             
-            plan_data = {
-                "session_id": session_id,
-                "intent": intent,
-                "confidence": confidence,
-                "agents_needed": agents_needed,
-                "execution_plan": execution_plan,
-                "session_state": session.conversation_state.value,
-                "awaiting_input": session.awaiting_input.value if session.awaiting_input else None,
-                "user_text": input_data.get("text", "")
-            }
+#             plan_data = {
+#                 "session_id": session_id,
+#                 "intent": intent,
+#                 "confidence": confidence,
+#                 "agents_needed": agents_needed,
+#                 "execution_plan": execution_plan,
+#                 "session_state": session.conversation_state.value,
+#                 "awaiting_input": session.awaiting_input.value if session.awaiting_input else None,
+#                 "user_text": input_data.get("text", "")
+#             }
             
-            return self._create_response(plan_data)
+#             return self._create_response(plan_data)
             
-        except Exception as e:
-            logger.error(f"Error in SessionAwarePlannerAgent.process: {e}")
-            return self._handle_error(e)
+#         except Exception as e:
+#             logger.error(f"Error in SessionAwarePlannerAgent.process: {e}")
+#             return self._handle_error(e)
     
-    async def _classify_intent_with_session(self, text: str, session: SessionData) -> Tuple[str, float]:
-        """Enhanced intent classification with session context"""
-        if not text.strip():
-            return "general_conversation", 0.3
+#     async def _classify_intent_with_session(self, text: str, session: SessionData) -> Tuple[str, float]:
+#         """Enhanced intent classification with session context"""
+#         if not text.strip():
+#             return "general_conversation", 0.3
         
-        # Check session state first
-        if session.conversation_state == ConversationState.BUILDING_MEMORY:
-            # We're in middle of building a memory
-            if any(keyword in text for keyword in self.completion_keywords):
-                return "complete_memory", 0.9
-            elif any(keyword in text for keyword in self.continuation_keywords):
-                return "continue_memory", 0.8
-            else:
-                # Default to continuing memory if we're in that state
-                return "continue_memory", 0.6
+#         # Check session state first
+#         if session.conversation_state == ConversationState.BUILDING_MEMORY:
+#             # We're in middle of building a memory
+#             if any(keyword in text for keyword in self.completion_keywords):
+#                 return "complete_memory", 0.9
+#             elif any(keyword in text for keyword in self.continuation_keywords):
+#                 return "continue_memory", 0.8
+#             else:
+#                 # Default to continuing memory if we're in that state
+#                 return "continue_memory", 0.6
         
-        # Check for memory continuation patterns
-        if session.pending_memory and any(keyword in text for keyword in self.continuation_keywords):
-            return "continue_memory", 0.7
+#         # Check for memory continuation patterns
+#         if session.pending_memory and any(keyword in text for keyword in self.continuation_keywords):
+#             return "continue_memory", 0.7
         
-        # Your existing classification logic
-        store_matches = sum(1 for keyword in self.store_keywords if keyword in text)
-        query_matches = sum(1 for keyword in self.query_keywords if keyword in text)
+#         # Your existing classification logic
+#         store_matches = sum(1 for keyword in self.store_keywords if keyword in text)
+#         query_matches = sum(1 for keyword in self.query_keywords if keyword in text)
         
-        total_words = len(text.split())
+#         total_words = len(text.split())
         
-        if store_matches > query_matches and store_matches > 0:
-            confidence = min((store_matches / max(total_words, 1)) * 5, 1.0)
-            confidence = max(confidence, 0.6)
-            return "store_memory", confidence
-        elif query_matches > 0:
-            confidence = min((query_matches / max(total_words, 1)) * 5, 1.0)
-            confidence = max(confidence, 0.6)
-            return "query_memory", confidence
-        else:
-            if any(q in text for q in ["?", "how", "why", "help"]):
-                return "general_conversation", 0.7
-            else:
-                return "general_conversation", 0.5
+#         if store_matches > query_matches and store_matches > 0:
+#             confidence = min((store_matches / max(total_words, 1)) * 5, 1.0)
+#             confidence = max(confidence, 0.6)
+#             return "store_memory", confidence
+#         elif query_matches > 0:
+#             confidence = min((query_matches / max(total_words, 1)) * 5, 1.0)
+#             confidence = max(confidence, 0.6)
+#             return "query_memory", confidence
+#         else:
+#             if any(q in text for q in ["?", "how", "why", "help"]):
+#                 return "general_conversation", 0.7
+#             else:
+#                 return "general_conversation", 0.5
     
-    async def _select_agents_with_session(self, intent: str, input_data: Dict[str, Any], 
-                                        session: SessionData) -> List[str]:
-        """Enhanced agent selection with session awareness"""
+#     async def _select_agents_with_session(self, intent: str, input_data: Dict[str, Any], 
+#                                         session: SessionData) -> List[str]:
+#         """Enhanced agent selection with session awareness"""
         
-        # Base agent selection (your existing logic)
-        agent_map = {
-            "store_memory": ["memory_agent", "response_agent"],
-            "continue_memory": ["memory_agent", "response_agent"],
-            "complete_memory": ["memory_agent", "response_agent"],
-            "query_memory": ["memory_agent", "response_agent"],
-            "general_conversation": ["response_agent"]
-        }
+#         # Base agent selection (your existing logic)
+#         agent_map = {
+#             "store_memory": ["memory_agent", "response_agent"],
+#             "continue_memory": ["memory_agent", "response_agent"],
+#             "complete_memory": ["memory_agent", "response_agent"],
+#             "query_memory": ["memory_agent", "response_agent"],
+#             "general_conversation": ["response_agent"]
+#         }
         
-        agents = agent_map.get(intent, ['response_agent']).copy()
+#         agents = agent_map.get(intent, ['response_agent']).copy()
         
-        # Add voice agent if audio input is present
-        if input_data.get("audio_data"):
-            agents.insert(0, "voice_agent")
+#         # Add voice agent if audio input is present
+#         if input_data.get("audio_data"):
+#             agents.insert(0, "voice_agent")
         
-        # Add vision agent if photo is present
-        if input_data.get("photo_url") or input_data.get("image_url"):
-            agents.insert(-1, "vision_agent")
+#         # Add vision agent if photo is present
+#         if input_data.get("photo_url") or input_data.get("image_url"):
+#             agents.insert(-1, "vision_agent")
         
-        # Add context agent if building memory and no context exists
-        if intent in ["store_memory", "continue_memory"] and not session.context:
-            agents.insert(-1, "context_agent")
+#         # Add context agent if building memory and no context exists
+#         if intent in ["store_memory", "continue_memory"] and not session.context:
+#             agents.insert(-1, "context_agent")
         
-        return agents
+#         return agents
     
-    def _create_execution_plan(self, intent: str, agents: List[str], 
-                             session: SessionData) -> Dict[str, Any]:
-        """Enhanced execution plan with session context"""
-        plan = {
-            "type": "sequential",
-            "steps": [],
-            "session_context": {
-                "state": session.conversation_state.value,
-                "has_pending_memory": session.pending_memory is not None,
-                "awaiting_input": session.awaiting_input.value if session.awaiting_input else None
-            }
-        }
+#     def _create_execution_plan(self, intent: str, agents: List[str], 
+#                              session: SessionData) -> Dict[str, Any]:
+#         """Enhanced execution plan with session context"""
+#         plan = {
+#             "type": "sequential",
+#             "steps": [],
+#             "session_context": {
+#                 "state": session.conversation_state.value,
+#                 "has_pending_memory": session.pending_memory is not None,
+#                 "awaiting_input": session.awaiting_input.value if session.awaiting_input else None
+#             }
+#         }
         
-        for agent_name in agents:
-            step = {
-                "agent": agent_name,
-                "action": "process"
-            }
+#         for agent_name in agents:
+#             step = {
+#                 "agent": agent_name,
+#                 "action": "process"
+#             }
             
-            # Enhanced instructions based on session state
-            if agent_name == "memory_agent":
-                if intent == "store_memory":
-                    step["instruction"] = "Start new memory building process"
-                elif intent == "continue_memory":  
-                    step["instruction"] = "Continue building existing memory"
-                elif intent == "complete_memory":
-                    step["instruction"] = "Complete and save memory"
-                elif intent == "query_memory":
-                    step["instruction"] = "Search existing memories"
+#             # Enhanced instructions based on session state
+#             if agent_name == "memory_agent":
+#                 if intent == "store_memory":
+#                     step["instruction"] = "Start new memory building process"
+#                 elif intent == "continue_memory":  
+#                     step["instruction"] = "Continue building existing memory"
+#                 elif intent == "complete_memory":
+#                     step["instruction"] = "Complete and save memory"
+#                 elif intent == "query_memory":
+#                     step["instruction"] = "Search existing memories"
             
-            elif agent_name == "response_agent":
-                if session.conversation_state == ConversationState.BUILDING_MEMORY:
-                    step["instruction"] = "Generate follow-up question for memory building"
-                else:
-                    step["instruction"] = "Generate conversational response"
+#             elif agent_name == "response_agent":
+#                 if session.conversation_state == ConversationState.BUILDING_MEMORY:
+#                     step["instruction"] = "Generate follow-up question for memory building"
+#                 else:
+#                     step["instruction"] = "Generate conversational response"
             
-            elif agent_name == "context_agent":
-                step["instruction"] = "Gather contextual information for memory"
+#             elif agent_name == "context_agent":
+#                 step["instruction"] = "Gather contextual information for memory"
             
-            plan["steps"].append(step)
+#             plan["steps"].append(step)
         
-        return plan
+#         return plan
     
-    def _create_response(self, plan_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Create response with session information"""
-        return {
-            "status": "success",
-            "agent": self.agent_name,
-            "data": plan_data,
-            "session_id": plan_data["session_id"],
-            "timestamp": datetime.now().isoformat()
-        }
+#     def _create_response(self, plan_data: Dict[str, Any]) -> Dict[str, Any]:
+#         """Create response with session information"""
+#         return {
+#             "status": "success",
+#             "agent": self.agent_name,
+#             "data": plan_data,
+#             "session_id": plan_data["session_id"],
+#             "timestamp": datetime.now().isoformat()
+#         }
     
-    def _handle_error(self, error: Exception) -> Dict[str, Any]:
-        """Enhanced error handling"""
-        logger.error(f"PlannerAgent error: {error}")
-        return {
-            "status": "error",
-            "agent": self.agent_name,
-            "error": str(error),
-            "timestamp": datetime.now().isoformat()
-        }
+#     def _handle_error(self, error: Exception) -> Dict[str, Any]:
+#         """Enhanced error handling"""
+#         logger.error(f"PlannerAgent error: {error}")
+#         return {
+#             "status": "error",
+#             "agent": self.agent_name,
+#             "error": str(error),
+#             "timestamp": datetime.now().isoformat()
+#         }
 
 # Usage Example
 # async def main():

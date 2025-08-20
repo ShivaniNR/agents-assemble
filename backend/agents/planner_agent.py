@@ -1,5 +1,6 @@
 from .base_agent import BaseAgent
 from core.sessionManager import SessionManager, ConversationState, InputType
+from utils.llm_response_handling import clean_llm_json
 from typing import Any, Dict, List, Tuple, Optional
 import logging
 import json
@@ -25,7 +26,7 @@ class PlannerAgent(BaseAgent):
         self.available_agents = {
             "memory_agent": "Handles memory storage, retrieval, and management",
             "response_agent": "Generates conversational responses to users",
-            "voice_agent": "Processes audio/speech input and transcription",
+            #"voice_agent": "Processes audio/speech input and transcription",
             "vision_agent": "Analyzes images and visual content",
             "context_agent": "Gathers contextual information for memory enrichment",
             "emotion_agent": "Detects emotional context and sentiment",
@@ -184,8 +185,8 @@ class PlannerAgent(BaseAgent):
                     "temperature": 0.1,
                     "max_output_tokens": 200
                 })
-
-            result = json.loads(response.text.strip())
+            result = clean_llm_json(response)
+            #result = json.loads(response.text.strip())
             
             # Validate response
             intent = result.get("intent", "general_conversation")
@@ -266,8 +267,8 @@ class PlannerAgent(BaseAgent):
         """
         # Prepare input analysis
         input_types = []
-        if input_data.get("audio_data") or input_data.get("audio_url"):
-            input_types.append("audio")
+        # if input_data.get("audio_data") or input_data.get("audio_url"):
+        #     input_types.append("audio")
         if input_data.get("photo_url") or input_data.get("image_url"):
             input_types.append("image")
         if input_data.get("text"):
@@ -287,7 +288,7 @@ class PlannerAgent(BaseAgent):
         
         SELECTION CRITERIA:
         - Choose agents needed for the specific intent
-        - Consider input types (audio needs voice_agent, images need vision_agent)
+        - Consider input types (images need vision_agent)
         - Order agents by execution dependency
         - Include context_agent for memory building if not already enriched
         - Always include response_agent for user interaction
@@ -305,7 +306,8 @@ class PlannerAgent(BaseAgent):
                 }
             )
 
-            agents = json.loads(response.text.strip())
+            agents = clean_llm_json(response)
+            #agents = json.loads(response.text.strip())
             
             # Validate agents
             valid_agents = []
@@ -342,8 +344,8 @@ class PlannerAgent(BaseAgent):
         agents = agent_map.get(intent, ["response_agent"]).copy()
         
         # Add specialized agents based on input
-        if input_data.get("audio_data") or input_data.get("audio_url"):
-            agents.insert(0, "voice_agent")
+        # if input_data.get("audio_data") or input_data.get("audio_url"):
+        #     agents.insert(0, "voice_agent")
         
         if input_data.get("photo_url") or input_data.get("image_url"):
             agents.insert(-1, "vision_agent")
@@ -389,7 +391,7 @@ class PlannerAgent(BaseAgent):
         - Include error handling and fallback strategies
         - Set appropriate timeouts and retry policies
         
-        IMPORTANT: Return ONLY valid JSON with no additional text or explanation. The response must start with {{ and end with }}.
+        IMPORTANT: Return ONLY valid JSON with no additional text or explanation.
 
         Return JSON execution plan:
         {{
@@ -408,7 +410,7 @@ class PlannerAgent(BaseAgent):
             "success_criteria": "How to measure success"
         }}
         """
-        
+
         try:
             response = self.ai_client.generate_content(
                 prompt,
@@ -417,10 +419,43 @@ class PlannerAgent(BaseAgent):
                     "max_output_tokens": 400
                 }
             )
-            plan = json.loads(response.text.strip())
             
+            # # Debug: Log the raw response
+            # logger.debug(f"Raw AI response: '{response}'")
+            # logger.debug(f"Response type: {type(response)}")
+            
+            # # Check if response has text attribute
+            # if hasattr(response, 'text'):
+            #     response_text = response.text
+            # else:
+            #     response_text = str(response)
+                
+            # logger.debug(f"Response text: '{response_text}'")
+            # logger.debug(f"Response text length: {len(response_text) if response_text else 0}")
+            
+            # # Check for empty response
+            # if not response_text or not response_text.strip():
+            #     logger.error("AI returned empty response")
+            #     raise ValueError("AI returned empty response")
+            
+            # # Clean the response text
+            # response_text = response_text.strip()
+            
+            # # Try to extract JSON if wrapped in markdown or other text
+            # json_start = response_text.find('{')
+            # json_end = response_text.rfind('}') + 1
+            
+            # if json_start >= 0 and json_end > json_start:
+            #     json_text = response_text[json_start:json_end]
+            #     logger.debug(f"Extracted JSON: '{json_text}'")
+            # else:
+            #     logger.error(f"No valid JSON found in response: '{response_text}'")
+            #     raise ValueError("No valid JSON found in AI response")
+            
+            plan = clean_llm_json(response)
             # Validate plan structure
             if not self._validate_ai_plan(plan):
+                logger.error(f"Invalid plan structure: {plan}")
                 raise ValueError("Invalid plan structure from AI")
             
             # Add session context
@@ -433,9 +468,43 @@ class PlannerAgent(BaseAgent):
             
             return plan
             
-        except (json.JSONDecodeError, ValueError) as e:
+        except Exception as e:
             logger.error(f"Failed to create AI execution plan: {e}")
-            raise
+            logger.error(f"Error type: {type(e)}")
+            
+            # Return a basic fallback plan instead of raising
+            fallback_plan = self._create_fallback_plan(agents, intent, session)
+            logger.info("Using fallback execution plan")
+            return fallback_plan
+        
+        # try:
+        #     response = self.ai_client.generate_content(
+        #         prompt,
+        #         generation_config={
+        #             "temperature": 0.1,
+        #             "max_output_tokens": 400
+        #         }
+        #     )
+        #     logger.debug(f"AI raw response: {response.text}")
+        #     plan = json.loads(response.text.strip())
+            
+        #     # Validate plan structure
+        #     if not self._validate_ai_plan(plan):
+        #         raise ValueError("Invalid plan structure from AI")
+            
+        #     # Add session context
+        #     plan["session_context"] = {
+        #         "state": session.conversation_state.value,
+        #         "has_pending_memory": session.pending_memory is not None,
+        #         "awaiting_input": session.awaiting_input.value if session.awaiting_input else None,
+        #         "conversation_turn": len(session.conversation_history)
+        #     }
+            
+        #     return plan
+            
+        # except (json.JSONDecodeError, ValueError) as e:
+        #     logger.error(f"Failed to create AI execution plan: {e}")
+        #     raise
 
     def _create_fallback_execution_plan(self, intent: str, agents: List[str], session) -> Dict[str, Any]:
         """
@@ -478,8 +547,8 @@ class PlannerAgent(BaseAgent):
             elif agent_name == "vision_agent":
                 step["instruction"] = "Analyze images and extract relevant information"
                 
-            elif agent_name == "voice_agent":
-                step["instruction"] = "Process and transcribe speech input"
+            # elif agent_name == "voice_agent":
+            #     step["instruction"] = "Process and transcribe speech input"
                 
             elif agent_name == "context_agent":
                 step["instruction"] = "Gather contextual information for memory enrichment"

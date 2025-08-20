@@ -9,3 +9,6 @@ backend/data/embeddings/*
 backend/data/memories/events/*
 backend/.pytest_cache
 backend/working_main.py
+backend/uploads/*
+voiceInterface-old.tsx
+test_planner_LLM_response.py

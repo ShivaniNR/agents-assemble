@@ -53,9 +53,21 @@ class VoiceAgent(BaseAgent):
                 audio_file_path = input_data.get("audio_file_path") or input_data.get("audio_data")
                 if not audio_file_path:
                     return self._create_response({"error": "Missing audio file path"}, status="error")
-                transcript = self.speech_to_text(audio_file_path)  # Fixed: pass the path directly
+                
+                logger.info(f"Processing audio file: {audio_file_path}")
+                
+                # Check if file exists
+                if not os.path.exists(audio_file_path):
+                    logger.error(f"Audio file not found: {audio_file_path}")
+                    return self._create_response({"error": f"Audio file not found: {audio_file_path}"}, status="error")
+                
+                # Get file size for logging
+                file_size = os.path.getsize(audio_file_path)
+                logger.info(f"Audio file size: {file_size} bytes")
+                
+                transcript = self.speech_to_text(audio_file_path)
                 voice_output["transcript"] = transcript
-                logger.info(f"Transcribing voice done {transcript[:50]}...")
+                logger.info(f"Transcribing voice done: '{transcript[:50]}...'")
                 return self._create_response(voice_output)
             
             elif mode == "text-to-speech":
@@ -82,45 +94,116 @@ class VoiceAgent(BaseAgent):
         Returns:
             Transcribed text from the audio.
         """
-
+        logger.info(f"Starting speech to text conversion for file: {audio_file_path}")
+        
+        # Check file extension to determine format
+        file_ext = os.path.splitext(audio_file_path)[1].lower()
+        logger.info(f"File extension: {file_ext}")
+        
         with open(audio_file_path, "rb") as audio_file:
             content = audio_file.read()
+            logger.info(f"Read {len(content)} bytes from audio file")
 
         audio = speech.RecognitionAudio(content=content)
         
-        # Auto-detect configuration - let Google Cloud determine the format
-        config = speech.RecognitionConfig(
-            encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
-            # Omit sample_rate_hertz to let Google auto-detect from WAV header
-            language_code="en-US",
-            # Enable automatic punctuation for better output
-            enable_automatic_punctuation=True,
-            # Use enhanced model for better accuracy
-            use_enhanced=True,
-            model='latest_long'
-        )
+        # Configure based on file type
+        if file_ext == '.webm':
+            # WebM files typically use OGG_OPUS encoding
+            config = speech.RecognitionConfig(
+                encoding=speech.RecognitionConfig.AudioEncoding.OGG_OPUS,
+                sample_rate_hertz=48000,  # Common for WebM
+                language_code="en-US",
+                enable_automatic_punctuation=True,
+                use_enhanced=True,
+                model='latest_long',
+                audio_channel_count=1  # Mono audio is common for recordings
+            )
+            logger.info("Using OGG_OPUS encoding for WebM file")
+        else:
+            # Default configuration for other formats
+            config = speech.RecognitionConfig(
+                encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
+                language_code="en-US",
+                enable_automatic_punctuation=True,
+                use_enhanced=True,
+                model='latest_long'
+            )
+            logger.info(f"Using LINEAR16 encoding for {file_ext} file")
 
         try:
+            logger.info("Sending request to Google Speech-to-Text API...")
             response = self.stt_client.recognize(config=config, audio=audio)
             
+            logger.info(f"Received response with {len(response.results)} results")
+            
             # Combine results into a single transcript
-            transcript = " ".join(result.alternatives[0].transcript for result in response.results)
-            return transcript if transcript else "No speech detected in audio file"
+            if response.results:
+                transcript = " ".join(result.alternatives[0].transcript for result in response.results)
+                logger.info(f"Transcription successful: '{transcript[:50]}...'")
+                return transcript
+            else:
+                logger.warning("No results returned from Speech-to-Text API")
+                
+                # Try alternative encodings if no results
+                logger.info("Trying alternative encoding: WEBM_OPUS")
+                config = speech.RecognitionConfig(
+                    encoding=speech.RecognitionConfig.AudioEncoding.WEBM_OPUS,
+                    sample_rate_hertz=48000,
+                    language_code="en-US",
+                    enable_automatic_punctuation=True,
+                    use_enhanced=True,
+                    model='latest_long'
+                )
+                
+                response = self.stt_client.recognize(config=config, audio=audio)
+                if response.results:
+                    transcript = " ".join(result.alternatives[0].transcript for result in response.results)
+                    logger.info(f"WEBM_OPUS encoding successful: '{transcript[:50]}...'")
+                    return transcript
+                else:
+                    logger.warning("No results with WEBM_OPUS encoding either")
+                    return "No speech detected in audio file"
             
         except Exception as e:
-            # If auto-detection fails, try with common sample rates
-            common_rates = [44100, 48000, 16000, 8000]
-            for rate in common_rates:
-                try:
-                    config.sample_rate_hertz = rate
-                    response = self.stt_client.recognize(config=config, audio=audio)
-                    transcript = " ".join(result.alternatives[0].transcript for result in response.results)
-                    return transcript if transcript else "No speech detected in audio file"
-                except:
-                    continue
+            logger.error(f"Error in speech_to_text: {str(e)}")
             
-            # If all rates fail, raise the original exception
-            raise e
+            # Try with common sample rates and different encodings
+            encodings = [
+                (speech.RecognitionConfig.AudioEncoding.LINEAR16, "LINEAR16"),
+                (speech.RecognitionConfig.AudioEncoding.OGG_OPUS, "OGG_OPUS"),
+                (speech.RecognitionConfig.AudioEncoding.WEBM_OPUS, "WEBM_OPUS"),
+                (speech.RecognitionConfig.AudioEncoding.MP3, "MP3")
+            ]
+            
+            common_rates = [48000, 44100, 16000, 8000]
+            
+            logger.info("Trying fallback configurations...")
+            
+            for encoding, encoding_name in encodings:
+                for rate in common_rates:
+                    try:
+                        logger.info(f"Trying with encoding {encoding_name}, rate {rate}")
+                        config = speech.RecognitionConfig(
+                            encoding=encoding,
+                            sample_rate_hertz=rate,
+                            language_code="en-US",
+                            enable_automatic_punctuation=True,
+                            use_enhanced=True,
+                            model='latest_long'
+                        )
+                        response = self.stt_client.recognize(config=config, audio=audio)
+                        
+                        if response.results:
+                            transcript = " ".join(result.alternatives[0].transcript for result in response.results)
+                            logger.info(f"Fallback successful with {encoding_name}, {rate}: '{transcript[:50]}...'")
+                            return transcript
+                    except Exception as inner_e:
+                        logger.debug(f"Fallback failed with {encoding_name}, {rate}: {str(inner_e)}")
+                        continue
+            
+            # If all attempts fail, log the detailed error and return a generic message
+            logger.error(f"All transcription attempts failed. Original error: {str(e)}")
+            return "Could not transcribe audio. Speech recognition failed."
     
 # async def main():
 #     # Initialize session manager

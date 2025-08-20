@@ -61,10 +61,10 @@ export default function Home() {
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
   const [showPhotoUploadLeft, setShowPhotoUploadLeft] = useState(false);
 
-  const [currentUserQuery, setCurrentUserQuery] = useState("");
+  //const [currentUserQuery, setCurrentUserQuery] = useState("");
   const [isVoiceListening, setIsVoiceListening] = useState(false);
-  const [isProcessingVoice, setIsProcessingVoice] = useState(false);
-  const [voiceTranscript, setVoiceTranscript] = useState("");
+  //const [isProcessingVoice, setIsProcessingVoice] = useState(false);
+  //const [voiceTranscript, setVoiceTranscript] = useState("");
 
   const [actualUserQueries, setActualUserQueries] = useState<string[]>([]);
   const [isUsingRealQueries, setIsUsingRealQueries] = useState(false);
@@ -73,6 +73,7 @@ export default function Home() {
   const [useBackendTranscription, setUseBackendTranscription] = useState(true); // Toggle for backend vs browser
   const [currentUserId] = useState("user_123"); // You might get this from auth/session
   const [apiEndpoint] = useState("http://localhost:8000/api/process"); // Your API endpoint
+  const [displayText, setDisplayText] = useState("");
 
   const memoryPhotos = [
     { id: 1, name: "Jennifer Chen", imageUrl: "/Jennifer.jpeg" },
@@ -104,67 +105,71 @@ export default function Home() {
   ) => {
     console.log(`Voice transcript: "${transcript}", isFinal: ${isFinal}`);
 
-    if (useBackendTranscription) {
-      // In backend mode, only update UI for preview (not final processing)
-      if (!isFinal && transcript.startsWith("[Preview]")) {
-        setCurrentUserQuery(transcript);
-        setVoiceTranscript(transcript);
-      } else if (isFinal) {
-        // This is the final backend transcription
-        setCurrentUserQuery(transcript);
-        setVoiceTranscript(transcript);
+    // Update display text (removes [Preview] prefix if present)
+    const cleanTranscript = transcript.replace(/^\[Preview\]\s*/, "");
+    setDisplayText(cleanTranscript);
 
-        // Auto-process the backend transcription
-        await processVoiceQuery(transcript);
-      }
-    } else {
-      // Browser-only mode (original behavior)
-      setCurrentUserQuery(transcript);
-      setVoiceTranscript(transcript);
-
-      if (isFinal) {
-        await processVoiceQuery(transcript);
-      }
+    // Process final transcript
+    if (isFinal && !useBackendTranscription) {
+      await processVoiceQuery(cleanTranscript);
     }
   };
 
-  // NEW: Handle backend response
+  // Handle backend response
   const handleBackendResponse = async (response: any) => {
     console.log("Backend response received:", response);
 
-    if (response.success && response.result) {
-      const { transcribed_text, response: agentResponse } = response.result;
+    if (response.success) {
+      // Extract transcribed text and agent response
+      const transcribedText = response.transcribed_text || "";
+      const agentResponse = response.result || "I processed your request.";
 
-      // The transcript has already been handled in handleVoiceTranscript
-      // This is where you can handle additional backend data like:
-      // - Audio responses
-      // - Intent detection results
-      // - Memory storage confirmations
+      console.log("Transcribed text:", transcribedText);
+      console.log("Agent response:", agentResponse);
 
-      if (response.result.audio_response) {
-        // Play audio response if available
-        playAudioResponse(response.result.audio_response);
+      setDisplayText("");
+
+      // ✅ Handle memory upload trigger from backend transcription
+      if (
+        transcribedText.toLowerCase().includes("i want to remember this moment")
+      ) {
+        setShowPhotoUploadLeft(true);
       }
 
-      // Log for debugging
-      console.log("Agent response:", agentResponse);
-      console.log("Transcribed text:", transcribed_text);
+      // Process the conversation with both the transcribed text and agent response
+      await handleVoiceQueryWithResponse(transcribedText, agentResponse);
+
+      // ✅ OPTIONAL: Play audio response if provided
+      // if (response.audio_response) {
+      //   playAudioResponse(response.audio_response);
+      // }
+
+      // Process the conversation with both the transcribed text and agent response
+      // await handleVoiceQueryWithResponse(transcribedText, agentResponse);
+    } else {
+      // ✅ Handle backend errors gracefully
+      console.error("Backend processing failed:", response);
+      setDisplayText("Sorry, I couldn't process that. Please try again.");
+
+      // Clear error after 3 seconds
+      setTimeout(() => {
+        setDisplayText("");
+      }, 3000);
     }
   };
 
   // NEW: Play audio response from backend
-  const playAudioResponse = (audioData: string) => {
-    try {
-      const audio = new Audio(`data:audio/mp3;base64,${audioData}`);
-      audio.play().catch(console.error);
-    } catch (error) {
-      console.error("Error playing audio response:", error);
-    }
-  };
+  // const playAudioResponse = (audioData: string) => {
+  //   try {
+  //     const audio = new Audio(`data:audio/mp3;base64,${audioData}`);
+  //     audio.play().catch(console.error);
+  //   } catch (error) {
+  //     console.error("Error playing audio response:", error);
+  //   }
+  // };
 
   const handleVoiceStart = () => {
-    setCurrentUserQuery("");
-    setVoiceTranscript("");
+    setDisplayText("");
     console.log("Voice input started");
   };
 
@@ -175,139 +180,64 @@ export default function Home() {
   const handleVoiceError = (error: string) => {
     console.error("Voice error:", error);
     setIsVoiceListening(false);
-    setIsProcessingVoice(false);
-    // Show error to user
-    setCurrentUserQuery(`Voice Error: ${error}`);
+    setDisplayText(`Voice Error: ${error}`);
 
     // Clear error after 3 seconds
     setTimeout(() => {
-      setCurrentUserQuery("");
+      setDisplayText("");
     }, 3000);
   };
 
   const toggleVoiceListening = async () => {
-    if (isProcessingVoice) return;
-
-    if (isVoiceListening) {
-      // Stop listening
-      setIsVoiceListening(false);
-
-      // If using browser-only transcription, process the current transcript
-      if (!useBackendTranscription && voiceTranscript.trim()) {
-        setIsProcessingVoice(true);
-        await processVoiceQuery(voiceTranscript);
-        setIsProcessingVoice(false);
-      }
-      // Note: Backend transcription will be handled automatically in handleVoiceTranscript
-    } else {
-      // Start listening
-      setIsVoiceListening(true);
-    }
-
-    //   if (voiceTranscript.trim()) {
-    //     setIsProcessingVoice(true);
-
-    //     try {
-    //       const result: VoiceQueryResult = await voiceService.processVoiceQuery(
-    //         voiceTranscript
-    //       );
-
-    //       let adjustedResponse = result.response;
-
-    //       // SPECIAL OVERRIDE for Jake's Bday
-    //       if (
-    //         voiceTranscript.toLowerCase().includes("jake") &&
-    //         voiceTranscript.toLowerCase().includes("bday")
-    //       ) {
-    //         adjustedResponse = "I'm here! What's happening right now?";
-    //       }
-
-    //       if (result.success && adjustedResponse) {
-    //         if (
-    //           voiceTranscript
-    //             .toLowerCase()
-    //             .includes("i want to remember this moment")
-    //         ) {
-    //           setShowPhotoUploadLeft(true);
-    //         }
-    //         await handleVoiceQuery(voiceTranscript, adjustedResponse);
-    //       } else {
-    //         setCurrentUserQuery(
-    //           "I'm sorry, I couldn't process your request. Please try again."
-    //         );
-    //       }
-    //     } catch (error) {
-    //       console.error("Error processing voice query:", error);
-    //       setCurrentUserQuery(
-    //         "I'm experiencing some technical difficulties. Please try again."
-    //       );
-    //     } finally {
-    //       setIsProcessingVoice(false);
-    //     }
-    //   }
-    // } else {
-    //   setIsVoiceListening(true);
-    // }
+    console.log(
+      "Page: toggling voice listening from",
+      isVoiceListening,
+      "to",
+      !isVoiceListening
+    );
+    setIsVoiceListening(!isVoiceListening);
   };
 
   // Modified to handle both backend and legacy voiceService
   const processVoiceQuery = async (transcript: string) => {
     if (!transcript.trim()) return;
 
-    setIsProcessingVoice(true);
-
     try {
-      let response: string;
+      // For browser-based transcription (not using backend)
+      if (!useBackendTranscription) {
+        let response: string;
 
-      if (useBackendTranscription) {
-        // Backend has already processed and returned the response in handleBackendResponse
-        // For now, we'll use a default response since the actual response should come from backend
-        response =
-          "I've received and processed your message through the backend.";
-
-        // SPECIAL OVERRIDE for Jake's Bday (keeping your existing logic)
+        // Your existing special override logic
         if (
           transcript.toLowerCase().includes("jake") &&
           transcript.toLowerCase().includes("bday")
         ) {
           response = "I'm here! What's happening right now?";
-        }
-      } else {
-        // Use legacy voiceService for browser-only mode
-        const result: VoiceQueryResult = await voiceService.processVoiceQuery(
-          transcript
-        );
-
-        if (result.success && result.response) {
-          response = result.response;
-
-          // SPECIAL OVERRIDE for Jake's Bday
-          if (
-            transcript.toLowerCase().includes("jake") &&
-            transcript.toLowerCase().includes("bday")
-          ) {
-            response = "I'm here! What's happening right now?";
-          }
         } else {
-          response =
-            "I'm sorry, I couldn't process your request. Please try again.";
+          // Default response when not using backend
+          response = "I've received and processed your message.";
         }
-      }
 
-      // Handle memory upload trigger
-      if (transcript.toLowerCase().includes("i want to remember this moment")) {
-        setShowPhotoUploadLeft(true);
-      }
+        // Handle memory upload trigger
+        if (
+          transcript.toLowerCase().includes("i want to remember this moment")
+        ) {
+          setShowPhotoUploadLeft(true);
+        }
 
-      // Process the conversation flow
-      await handleVoiceQuery(transcript, response);
+        // Process the conversation flow with browser transcript
+        await handleVoiceQuery(transcript, response);
+      }
+      // For backend transcription, the handleBackendResponse will be called separately
+      // with both transcribed text and agent response
     } catch (error) {
       console.error("Error processing voice query:", error);
-      setCurrentUserQuery(
+      setDisplayText(
         "I'm experiencing some technical difficulties. Please try again."
       );
-    } finally {
-      setIsProcessingVoice(false);
+
+      // Clear error after 3 seconds
+      setTimeout(() => setDisplayText(""), 3000);
     }
   };
 
@@ -350,6 +280,67 @@ export default function Home() {
     }
   };
 
+  // Function to handle both transcript and response from backend
+  const handleVoiceQueryWithResponse = async (
+    transcript: string,
+    response: string
+  ) => {
+    console.log("Processing voice query with response:", {
+      transcript,
+      response,
+    });
+
+    // Handle memory upload trigger if needed
+    // if (transcript.toLowerCase().includes("i want to remember this moment")) {
+    //   setShowPhotoUploadLeft(true);
+    // }
+
+    // Use the same conversation flow logic from handleVoiceQuery
+    if (view === "home") {
+      setIsInitiated(true);
+      setIsUsingRealQueries(true);
+      setActualUserQueries([transcript]);
+      if (carouselRef.current) carouselRef.current.autoplay.stop();
+
+      setView("thinking");
+      await wait(1000); // Shorter wait since we already have both transcript and response
+
+      setConversation([{ sender: "user", query: transcript }]);
+      setView("chat");
+
+      // Wait for typewriter effect on user message
+      const userWords = transcript.split(" ");
+      const userTypewriterDuration = userWords.length * 120 + 500;
+      await wait(userTypewriterDuration);
+
+      // Add agent response
+      setConversation((prev) => [
+        ...prev,
+        { sender: "agent", query: "", response: response },
+      ]);
+      setCurrentStepIndex(1);
+    } else if (view === "chat") {
+      // Add user query to conversation
+      setActualUserQueries((prev) => [...prev, transcript]);
+      setConversation((prev) => [
+        ...prev,
+        { sender: "user", query: transcript },
+      ]);
+
+      // Wait for typewriter effect on user message
+      const userWords = transcript.split(" ");
+      const userTypewriterDuration = userWords.length * 120 + 500;
+      await wait(userTypewriterDuration);
+
+      // Add agent response
+      setConversation((prev) => [
+        ...prev,
+        { sender: "agent", query: "", response: response },
+      ]);
+      setCurrentStepIndex((prev) => prev + 1);
+    }
+  };
+
   const handleGoHome = () => {
     setView("home");
     setConversation([]);
@@ -357,10 +348,8 @@ export default function Home() {
     setIsInitiated(false);
     setIsUsingRealQueries(false);
     setActualUserQueries([]);
-    setCurrentUserQuery("");
-    setVoiceTranscript("");
+    setDisplayText(""); // ✅ ADD: Reset display text
     setIsVoiceListening(false);
-    setIsProcessingVoice(false);
     setShowPhotoUploadLeft(false);
     voiceService.resetConversation();
     if (carouselRef.current) {
@@ -422,7 +411,7 @@ export default function Home() {
                   </nav>
                 </header>
               </div>
-              <div className="p-5 sm:p-8 flex flex-col h-full max-w-5xl mx-auto">
+              <div className="p-5 sm:p-8 flex flex-col h-full max-w-5xl mx-auto overflow-auto">
                 <main className="flex-grow flex flex-col items-center justify-center space-y-10">
                   <div className="text-center">
                     <h1 className="text-5xl font-bold text-gray-800">
@@ -491,12 +480,10 @@ export default function Home() {
                         />
                       ) : (
                         <p className="text-gray-500 text-base">
-                          {isProcessingVoice
-                            ? "Processing your request..."
-                            : isVoiceListening && voiceTranscript
-                            ? voiceTranscript
-                            : currentUserQuery ||
-                              "Ask or talk about a memory..."}
+                          {displayText ||
+                            (isVoiceListening
+                              ? "Listening... start speaking"
+                              : "Ask or talk about a memory...")}
                         </p>
                       )}
                     </div>
@@ -506,12 +493,11 @@ export default function Home() {
                       onVoiceStart={handleVoiceStart}
                       onVoiceEnd={handleVoiceEnd}
                       onError={handleVoiceError}
-                      disabled={isProcessingVoice}
+                      onBackendResponse={handleBackendResponse}
+                      disabled={false}
                       isListening={isVoiceListening}
                       onToggleListening={toggleVoiceListening}
-                      // NEW props for backend integration
                       useBackendTranscription={useBackendTranscription}
-                      onBackendResponse={handleBackendResponse}
                       userId={currentUserId}
                       apiEndpoint={apiEndpoint}
                     />
@@ -657,12 +643,11 @@ export default function Home() {
                         onVoiceStart={handleVoiceStart}
                         onVoiceEnd={handleVoiceEnd}
                         onError={handleVoiceError}
-                        disabled={isProcessingVoice}
+                        onBackendResponse={handleBackendResponse}
+                        disabled={false}
                         isListening={isVoiceListening}
                         onToggleListening={toggleVoiceListening}
-                        // NEW: Backend integration props for chat view too
                         useBackendTranscription={useBackendTranscription}
-                        onBackendResponse={handleBackendResponse}
                         userId={currentUserId}
                         apiEndpoint={apiEndpoint}
                       />

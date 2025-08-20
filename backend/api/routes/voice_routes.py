@@ -1,10 +1,12 @@
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException, BackgroundTasks, File, UploadFile, Form
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any
 from datetime import datetime
 import uuid
+import base64
 import json
+import os
 
 #from api.models import VoiceProcessRequest, VoiceProcessResponse
 from core.inputProcessor import InputProcessor
@@ -29,65 +31,221 @@ class VoiceProcessResponse(BaseModel):
     processing_time_ms: int
     request_id: str
 
+# Ensure uploads folder exists
+UPLOAD_FOLDER = "uploads"
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 # Initialize processor (consider using dependency injection)
 processor = InputProcessor()
 
 @router.post("/process", response_model=VoiceProcessResponse)
 async def process_voice_input(
-    request: VoiceProcessRequest,
-    background_tasks: BackgroundTasks
+    browser_transcript: str = Form(..., description="Transcript from browser speech recognition"),
+    user_id: str = Form(default="anonymous", description="User identifier"),
+    timestamp: Optional[str] = Form(default=None, description="Request timestamp"),
+    input_method: str = Form(default="voice", description="Input method"),
+    browser_preview: str = Form(default="false", description="Whether this is a preview"),
+    
+    # Audio file (optional - will be None if no audio sent)
+    audio: Optional[UploadFile] = File(None, description="Audio file"),
+    
+    background_tasks: BackgroundTasks = BackgroundTasks()
 ):
-    """Main voice processing endpoint."""
+    """Main voice processing endpoint - now handles FormData."""
     request_id = str(uuid.uuid4())
     start_time = datetime.now()
-    
-    logger.info(f"Request {request_id}: Processing input from user {request.user_id}")
-    
+
+    logger.info(f"Request {request_id}: Processing FormData from user {user_id}")
     try:
-        # Convert to dict for processing
+        # Handle audio data
+        audio_data = None
+        if audio is not None:
+            # Read the uploaded audio file
+            audio_content = await audio.read()
+
+            # Save to temp file if needed
+            temp_file_path = f"uploads/temp_audio_{request_id}.webm"
+            with open(temp_file_path, "wb") as f:
+                f.write(audio_content)
+
+            logger.info(f"Request {request_id}: Audio saved to {temp_file_path}")
+            audio_data = temp_file_path
+        else:
+            logger.info(f"Request {request_id}: No audio file provided")
+        
+        # Convert form data to your existing request_dict format
         request_dict = {
-            "text": request.text,
-            "audio_data": request.audio_data,
-            "user_id": request.user_id,
-            "timestamp": request.timestamp or datetime.now().isoformat(),
-            "input_method": request.input_method,
-            "browser_preview": request.browser_preview,
+            "text": "",
+            "audio_data": audio_data,  # Will be None if no audio
+            "browser_transcript": browser_transcript,
+            "user_id": user_id,
+            "timestamp": timestamp or datetime.now().isoformat(),
+            "input_method": input_method,
+            "browser_preview": browser_preview.lower() == "true",  # Convert string to boolean
             "request_id": request_id,
             "explicit_complete_memory": True
         }
-
-        logger.info(f"Request {request_id}: Received input - {json.dumps(request_dict, indent=2)}")
         
         # Process the input
         result = await processor.process_request(request_dict)
+
+        # Clean up temp file if it exists
+        if audio_data and os.path.exists(audio_data):
+            background_tasks.add_task(os.remove, audio_data)
         
-        # Access the nested structure correctly
-        response_data = result.get('result', {}).get('final_response', {}).get('response_text', '')
+        # Get the transcribed text from the processed input
+        transcribed_text = ""
+        if result:
+            # First check if there's an error
+            if not result.get('success', True):
+                logger.error(f"Request {request_id}: Processing failed: {result.get('error')}")
+                return JSONResponse(
+                    status_code=500,
+                    content={
+                        "success": False,
+                        "error": result.get('error', 'Unknown error'),
+                        "request_id": request_id
+                    }
+                )
+            
+            # Access the nested structure correctly
+            response_data = result.get('result', {}).get('final_response', {}).get('response_text', '')
+            # If successful, extract the transcribed text
+            if result.get('text', ''):
+                transcribed_text = result["text"]
+            else:
+                # Fallback to browser transcript if no transcription from backend
+                transcribed_text = browser_transcript
+                logger.info(f"Request {request_id}: Using browser transcript as fallback")
+        else:
+            # If no result at all, use the browser transcript
+            transcribed_text = browser_transcript
+            logger.info(f"Request {request_id}: No result from processor, using browser transcript")
         
         # Calculate total processing time
         processing_time = int((datetime.now() - start_time).total_seconds() * 1000)
         
+        logger.info(f"Response with transcribed text: {transcribed_text[:50]}...")
+
+        # Return the transcribed text to the client
         return JSONResponse(
             status_code=200, 
             content={
-                "result": response_data, 
-                'processing_time_ms': processing_time, 
-                'request_id': request_id
-            }
-        )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Request {request_id}: Unexpected error - {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "error": "Internal server error",
-                "message": str(e),
+                "success": True,
+                "result": response_data,
+                "transcribed_text": transcribed_text,
+                "processing_time_ms": processing_time, 
                 "request_id": request_id
             }
         )
+        # return VoiceProcessResponse(
+        #     success=True,
+        #     transcribed_text=request_dict["text"],  # or your improved transcript
+        #     response="Successfully processed your request",  # your actual response
+        #     request_id=request_id,
+        #     processing_time=(datetime.now() - start_time).total_seconds()
+        # )
+        
+    except Exception as e:
+        logger.error(f"Request {request_id}: Error processing - {str(e)}")
+        return VoiceProcessResponse(
+            success=False,
+            error=str(e),
+            request_id=request_id,
+            processing_time=(datetime.now() - start_time).total_seconds()
+        )
+
+
+
+@router.post("/upload")
+async def upload_audio(file: UploadFile = File(None)):
+    logger.info(f"entered the function")
+    try:
+        # Case 1: If file comes from form-data (frontend or Postman)
+        if file:
+            filename = f"audio_{datetime.now().strftime('%Y%m%d_%H%M%S')}{os.path.splitext(file.filename)[1]}"
+            filepath = os.path.join(UPLOAD_FOLDER, filename)
+
+            with open(filepath, "wb") as f:
+                f.write(await file.read())
+
+            return JSONResponse({"message": "File saved", "path": filepath})
+
+        # Case 2: If base64 string is sent in JSON (raw body)
+        # elif audioBase64:
+        #     audio_bytes = base64.b64decode(audioBase64)
+        #     filename = f"audio_{datetime.now().strftime('%Y%m%d_%H%M%S')}.webm"
+        #     filepath = os.path.join(UPLOAD_FOLDER, filename)
+
+        #     with open(filepath, "wb") as f:
+        #         f.write(audio_bytes)
+
+        #     return JSONResponse({"message": "File saved", "path": filepath})
+
+        else:
+            return JSONResponse({"error": "No audio found in request"}, status_code=400)
+
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+
+
+# @router.post("/process", response_model=VoiceProcessResponse)
+# async def process_voice_input(
+#     request: VoiceProcessRequest,
+#     background_tasks: BackgroundTasks
+# ):
+#     """Main voice processing endpoint."""
+#     request_id = str(uuid.uuid4())
+#     start_time = datetime.now()
+    
+#     logger.info(f"Request {request_id}: Processing input from user {request.user_id}")
+    
+#     try:
+#         # Convert to dict for processing
+#         request_dict = {
+#             "text": request.text,
+#             "audio_data": request.audio_data,
+#             "user_id": request.user_id,
+#             "timestamp": request.timestamp or datetime.now().isoformat(),
+#             "input_method": request.input_method,
+#             "browser_preview": request.browser_preview,
+#             "request_id": request_id,
+#             "explicit_complete_memory": True
+#         }
+
+#         logger.info(f"Request {request_id}: Received input - {json.dumps(request_dict, indent=2)}")
+        
+#         # Process the input
+#         result = await processor.process_request(request_dict)
+        
+#         # Access the nested structure correctly
+#         response_data = result.get('result', {}).get('final_response', {}).get('response_text', '')
+        
+#         # Calculate total processing time
+#         processing_time = int((datetime.now() - start_time).total_seconds() * 1000)
+        
+#         return JSONResponse(
+#             status_code=200, 
+#             content={
+#                 "result": response_data, 
+#                 'processing_time_ms': processing_time, 
+#                 'request_id': request_id
+#             }
+#         )
+        
+#     except HTTPException:
+#         raise
+#     except Exception as e:
+#         logger.error(f"Request {request_id}: Unexpected error - {str(e)}")
+#         raise HTTPException(
+#             status_code=500,
+#             detail={
+#                 "error": "Internal server error",
+#                 "message": str(e),
+#                 "request_id": request_id
+#             }
+#         )
 
 
 # # # api/routes/voice_routes.py - Voice processing endpoints
